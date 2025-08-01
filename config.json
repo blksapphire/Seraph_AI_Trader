@@ -1,0 +1,58 @@
+{
+    "system_identity": {
+        "name": "Seraph-Prime"
+    },
+    "mt5_credentials": {
+        "login": 12345678,
+        "password": "YOUR_MT5_PASSWORD",
+        "server": "YourBroker-Server"
+    },
+    "trading_parameters": {
+        "symbol": "EURUSD",
+        "timeframe": "TIMEFRAME_M15",
+        "lot_size": 0.01
+    },
+    "strategy_weights": {
+        "technical_analysis": 0.4,
+        "structural_analysis": 0.4,
+        "fundamental_analysis": 0.2
+    },
+    "structural_parameters": {
+        "swing_point_lookback": 10,
+        "bos_choch_threshold_atr": 1.5
+    },
+    "fundamental_parameters": {
+        "news_api_key": "YOUR_NEWSAPI_KEY",
+        "news_sentiment_model": "ProsusAI/finbert",
+        "currencies_to_monitor": [
+            "USD",
+            "EUR"
+        ]
+    },
+    "model_architecture": {
+        "lookback_period": 60,
+        "lstm_units": 100,
+        "dropout_rate": 0.2,
+        "model_path": "seraph_model.h5"
+    },
+    "training_settings": {
+        "epochs": 50,
+        "batch_size": 32,
+        "validation_split": 0.1,
+        "historical_data_bars": 10000
+    },
+    "risk_management": {
+        "stop_loss_pips": 150,
+        "take_profit_pips": 300,
+        "max_open_positions": 5
+    },
+    "dashboard": {
+        "host": "127.0.0.1",
+        "port": 8050,
+        "refresh_interval_seconds": 5
+    },
+    "system_files": {
+        "log_file": "seraph_activity.log",
+        "status_file": "seraph_status.json"
+    }
+}
