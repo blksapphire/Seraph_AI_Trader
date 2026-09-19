@@ -5,7 +5,7 @@ import pandas as pd
 FEATURES=["return_1","return_3","atr","rsi","macd","macd_signal","macd_hist","bb_position","ema_fast_dist","ema_slow_dist","volume_z","range_pct","fvg","order_block"]
 
 class TechnicalAnalyzer:
-    def __init__(self, config):
+    def __init__(self,config):
         self.cfg=config; self.model=None; self.scaler=None; self.features=FEATURES.copy(); self.load_model()
 
     @staticmethod
@@ -28,20 +28,30 @@ class TechnicalAnalyzer:
     def load_model(self):
         try:
             import joblib
-            if os.path.exists(self.cfg["technical"]["model_path"]) and os.path.exists(self.cfg["technical"]["scaler_path"]):
-                self.model=joblib.load(self.cfg["technical"]["model_path"]); self.scaler=joblib.load(self.cfg["technical"]["scaler_path"])
-                if os.path.exists(self.cfg["technical"]["feature_path"]): self.features=json.load(open(self.cfg["technical"]["feature_path"]))
+            p=self.cfg["technical"]["model_path"]; s=self.cfg["technical"]["scaler_path"]
+            if os.path.exists(p) and os.path.exists(s):
+                self.model=joblib.load(p); self.scaler=joblib.load(s)
+                f=self.cfg["technical"]["feature_path"]
+                if os.path.exists(f):
+                    with open(f) as fh:self.features=json.load(fh)
                 logging.info("Technical model loaded")
-        except Exception as exc: logging.warning("Technical model unavailable: %s",exc)
+        except Exception as exc:logging.warning("Technical model unavailable: %s",exc)
 
     def analyze(self,df):
-        x=self.calculate_features(df).dropna()
-        if len(x)<self.cfg["technical"]["lookback"]: return {"score":0.0,"confidence":0.0,"narrative":"Insufficient technical history","regime":"unknown"}
+        x=self.calculate_features(df).replace([np.inf,-np.inf],np.nan).dropna()
+        lookback=self.cfg["technical"]["lookback"]
+        if len(x)<lookback:return {"score":0.0,"confidence":0.0,"narrative":"Insufficient technical history","regime":"unknown"}
         q=x.iloc[-1]; trend=float(np.tanh(q["ema_fast_dist"]*120+q["ema_slow_dist"]*60)); momentum=float(np.tanh(q["macd_hist"]/(q["atr"]+1e-9)*4)); rsi=float(np.clip((q["rsi"]-50)/25,-1,1))
         rule=float(np.clip(.45*trend+.35*momentum+.20*rsi,-1,1)); model_score=None
-        if self.model and self.scaler:
+        if self.model is not None and self.scaler is not None:
             try:
-                seq=x[self.features].tail(self.cfg["technical"]["lookback"]); z=self.scaler.transform(seq); raw=float(np.asarray(self.model.predict(z)).ravel()[0]); model_score=2*raw-1
-            except Exception as exc: logging.warning("Model prediction failed: %s",exc)
-        score=rule if model_score is None else float(np.clip(.45*rule+.55*model_score,-1,1)); regime="trend" if abs(trend)>.45 else "momentum" if abs(momentum)>.45 else "range"
+                seq=x[self.features].tail(lookback); z=self.scaler.transform(seq)
+                if hasattr(self.model,"predict_proba"):
+                    raw=float(self.model.predict_proba(z)[-1,1])
+                else:
+                    raw=float(np.asarray(self.model.predict(z)).ravel()[0])
+                model_score=2*raw-1
+            except Exception as exc:logging.warning("Model prediction failed: %s",exc)
+        score=rule if model_score is None else float(np.clip(.45*rule+.55*model_score,-1,1))
+        regime="trend" if abs(trend)>.45 else "momentum" if abs(momentum)>.45 else "range"
         return {"score":score,"confidence":abs(score),"narrative":f"{regime} | RSI {q['rsi']:.1f} | MACD {momentum:+.2f}","regime":regime}
