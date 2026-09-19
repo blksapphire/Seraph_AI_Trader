@@ -1,59 +1,71 @@
 # Seraph-Prime v2
 
-Seraph-Prime is a local-first multi-brain trading research and execution system for MetaTrader 5.
+Local-first multi-brain trading research and execution system for MetaTrader 5.
 
-> **Research/demo software.** The default mode is `paper`. Do not treat model confidence as a guarantee of future returns. Validate on historical data, replay/backtests and a demo account before enabling live execution.
+**Default mode is PAPER.** Live execution is explicitly opt-in. This project is for research and demo validation; model confidence is not a guarantee of trading performance.
 
 ## Architecture
+MT5 → Market Data → Strategy Ensemble → Technical/SMC/Fundamental/HTF Brains → Decision Engine → Risk Engine → Paper/Live Executor → Journal + Dashboard
 
-`MT5 -> Market Data -> Technical / Structural / Fundamental / HTF brains -> Decision Engine -> Risk Engine -> Executor -> Journal + Dashboard`
+## Strategies
+- EMA trend following
+- MACD momentum
+- RSI/Bollinger mean reversion
+- Donchian-style breakout
+- VWAP deviation
+- candlestick/rejection patterns
+- ATR volatility regime
+- liquidity sweeps
+- break of structure / displacement
+- higher-timeframe structure confirmation
+- optional ML probability overlay
 
-### Brains
-- **Technical:** normalized trend/momentum/volatility features with an optional trained ML model and a deterministic fallback.
-- **Structural:** volatility-aware liquidity sweep and break-of-structure analysis.
-- **Fundamental:** cached NewsAPI headlines with optional FinBERT sentiment; failures degrade to neutral rather than stopping the trader.
-- **HTF confirmation:** H1 structure is evaluated independently before an M15 decision is accepted.
+Every strategy produces a normalized directional score and is exposed in runtime state.
 
-### Decision layer
-Every cycle records the final directional score, confidence, brain agreement and per-brain evidence. The action is only BUY/SELL when the configured threshold and agreement requirement are both met; otherwise it is HOLD.
-
-### Risk layer
-The new runtime includes percentage-based risk sizing, ATR-derived stop/target levels, spread limits, maximum open positions, per-symbol position limits and an equity drawdown guard. Live orders are passed through MT5 order checking and the returned trade result is inspected. MT5 documents `initialize`, market-data functions, `order_check` and `order_send` as the Python integration path. citeturn0search1turn0search0
-
-## Setup
-```bash
+## Install
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
+python seraph_healthcheck.py
 
-Configure `config.json`. Keep it in `paper` mode while validating.
+MT5 must be installed/running and accessible to Python for market-data, training, replay and execution commands.
 
-Train the technical model:
-```bash
+## Train
 python seraph_trainer.py
-```
 
-Run Seraph:
-```bash
+The ML model is an additional probability signal; the deterministic strategy ensemble remains usable without it.
+
+## Run paper mode
+Keep "mode": "paper" in config.json.
 python seraph_prime_orchestrator.py
-```
 
-Run the dashboard in another terminal:
-```bash
+The system analyzes every configured symbol and calculates hypothetical entry/SL/TP levels without sending orders.
+
+## Dashboard
 python seraph_dashboard.py
-```
 
-## Training design
+## Replay/backtest
+python seraph_backtester.py --symbol XAUUSD --timeframe M15 --bars 5000
+python seraph_backtester.py --symbol GBPJPY --timeframe M15 --bars 5000
+python seraph_backtester.py --symbol EURUSD --timeframe M15 --bars 5000
 
-The trainer uses a chronological holdout rather than randomly shuffling observations. Time-series validation should preserve temporal order; scikit-learn's `TimeSeriesSplit` is one standard implementation for this problem class. citeturn0search11
+Replay results are research metrics, not proof of profitability.
 
-The current model is intentionally a lightweight gradient-boosting baseline. This gives us a measurable baseline before introducing a larger LSTM/RL system. The ML layer can be replaced without changing the decision, risk or execution interfaces.
+## Tests
+pytest -q
+python -m compileall -q .
 
-## Roadmap
-1. Historical replay/backtesting with spread, slippage and commission.
-2. Trade memory and post-trade outcome labeling.
-3. Multi-timeframe feature store and regime classifier.
-4. Walk-forward evaluation and parameter search.
-5. Ensemble calibration.
-6. Reinforcement-learning experiments only after a stable, measurable baseline.
+GitHub Actions is CI only: it checks syntax and unit tests. It is not intended to run the MT5 trader or place trades.
+
+## Next engineering layer
+1. Cost-aware backtester
+2. Trade lifecycle manager and minimum-hold enforcement
+3. Persistent trade memory/outcome labeling
+4. Session and economic-event filters
+5. Walk-forward optimization
+6. Probability calibration
+7. Regime classifier
+8. Ensemble/reward learning
+9. RL experiments after the baseline is measurable
+
+Never enable live mode until paper/replay behaviour has been inspected on a demo account.
