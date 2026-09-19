@@ -240,6 +240,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(200, {
                         "result": {
                             "ok": True,
+                            "approved": int(check.retcode) in {0, mt5.TRADE_RETCODE_DONE},
                             "retcode": int(check.retcode),
                             "comment": str(getattr(check, "comment", "")),
                             "balance": float(getattr(check, "balance", 0) or 0),
