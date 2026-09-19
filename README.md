@@ -31,7 +31,7 @@ Linux Mint
        Broker / Demo / Live account
 ```
 
-MetaQuotes documents the Python integration around Windows Python and the MT5 terminal. On Linux, MT5 itself can run through Wine; this project therefore isolates the native MetaTrader5 Python package inside the Wine-side bridge instead of trying to install it into Linux Python. citeturn642103search0turn642103search2
+MetaQuotes documents the Python integration around Windows Python and the MT5 terminal. On Linux, MT5 itself can run through Wine; this project therefore isolates the native MetaTrader5 Python package inside the Wine-side bridge instead of trying to install it into Linux Python.
 
 ## Modes
 
