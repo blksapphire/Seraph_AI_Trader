@@ -70,7 +70,7 @@ class SeraphPrime:
         request = self.risk.request(symbol, decision.action, price, sl, tp, volume)
 
         check = self.mt5.order_check(request)
-        if not check.get("ok"):
+        if not check.get("ok") or not check.get("approved"):
             return {
                 "executed": False,
                 "mode": "live",
