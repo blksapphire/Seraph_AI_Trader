@@ -1,122 +1,29 @@
-# seraph_trainer.py
-import logging
-import json
-import pickle
-import MetaTrader5 as mt5
-import pandas as pd
+import json,os,logging
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-
-from modules.technical_analyzer import TechnicalAnalyzer # Import the brain
+import joblib
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import HistGradientBoostingClassifier
+from modules.mt5_client import MT5Client
+from modules.technical_analyzer import TechnicalAnalyzer,FEATURES
 
 class SeraphTrainer:
-    def __init__(self, config_path="config.json"):
-        with open(config_path, 'r') as f:
-            self.config = json.load(f)
-        self.ai_name = self.config["system_identity"]["name"]
-        
-        logging.basicConfig(level=logging.INFO, format=f'%(asctime)s - [{self.ai_name} Trainer] - %(levelname)s - %(message)s')
-        
-        # Instantiate the analyzer to use its feature calculation logic
-        self.tech_analyzer = TechnicalAnalyzer(self.config)
-        self.scaler = MinMaxScaler(feature_range=(0, 1))
-        self.model = None
-        logging.info(f"Training Manager for {self.ai_name} initialized.")
+    def __init__(self,config_path="config.json"):
+        with open(config_path) as f:self.config=json.load(f)
+        self.client=MT5Client(self.config); self.tech=TechnicalAnalyzer(self.config)
 
-    def connect_mt5(self):
-        # ... (Same Linux-friendly connection logic as before) ...
-        pass
+    def train(self,symbol=None,timeframe=None):
+        symbol=symbol or self.config["market"]["symbols"][0]; timeframe=timeframe or self.config["market"]["primary_timeframe"]; self.client.connect()
+        try:df=self.client.rates(symbol,timeframe,self.config["training"]["historical_bars"])
+        finally:self.client.close()
+        x=self.tech.calculate_features(df).replace([np.inf,-np.inf],np.nan).dropna().copy(); horizon=int(self.config["training"]["horizon_bars"])
+        x["target"]=(x["close"].shift(-horizon)>x["close"]).astype(int); x=x.iloc[:-horizon].dropna(subset=FEATURES+["target"])
+        split=int(len(x)*(1-self.config["training"]["validation_fraction"])); Xtr,Xte=x[FEATURES].iloc[:split],x[FEATURES].iloc[split:]; ytr,yte=x.target.iloc[:split],x.target.iloc[split:]
+        if len(Xtr)<self.config["technical"]["min_training_rows"] or ytr.nunique()<2:raise RuntimeError("Not enough diverse clean rows to train")
+        scaler=StandardScaler(); Xtrz=scaler.fit_transform(Xtr); Xtez=scaler.transform(Xte)
+        model=HistGradientBoostingClassifier(max_iter=250,max_depth=5,learning_rate=.05,l2_regularization=.2,random_state=42); model.fit(Xtrz,ytr)
+        acc=model.score(Xtez,yte) if len(Xte) else 0.
+        os.makedirs(os.path.dirname(self.config["technical"]["model_path"]) or ".",exist_ok=True); joblib.dump(model,self.config["technical"]["model_path"]); joblib.dump(scaler,self.config["technical"]["scaler_path"])
+        with open(self.config["technical"]["feature_path"],"w") as f:json.dump(FEATURES,f)
+        logging.info("Technical model trained: rows=%d chronological_holdout_accuracy=%.3f",len(x),acc); print(f"trained {symbol} {timeframe}: {len(x)} rows, holdout accuracy={acc:.3f}")
 
-    def get_and_prepare_data(self):
-        """Fetches a large dataset and uses the TechnicalAnalyzer for feature engineering."""
-        logging.info("Fetching training data...")
-        symbol = self.config["trading_parameters"]["symbol"]
-        timeframe = getattr(mt5, self.config["trading_parameters"]["timeframe"])
-        bars = self.config["training_settings"]["historical_data_bars"]
-        rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, bars)
-        
-        if rates is None:
-            logging.error("Failed to download training data.")
-            return None
-            
-        df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s')
-        df.set_index('time', inplace=True)
-        
-        # Use the shared, centralized feature calculation method
-        df = self.tech_analyzer.calculate_features(df)
-        df.dropna(inplace=True)
-        logging.info(f"Data prepared with {len(df.columns)} features.")
-        return df
-
-    def create_sequences_and_save_scaler(self, df):
-        """Prepares data for the LSTM and saves the scaler and feature config."""
-        feature_columns = [
-            'close', 'high', 'low', 'open', 'tick_volume',
-            'sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'rsi',
-            'bb_upper', 'bb_lower', 'fvg', 'order_block'
-        ]
-        available_features = [col for col in feature_columns if col in df.columns]
-        
-        scaled_data = self.scaler.fit_transform(df[available_features])
-        
-        # Save for the live bot
-        with open('scaler.pkl', 'wb') as f: pickle.dump(self.scaler, f)
-        with open('feature_columns.json', 'w') as f: json.dump(available_features, f)
-        logging.info("Scaler and feature list saved for live deployment.")
-
-        lookback = self.config["model_architecture"]["lookback_period"]
-        X, y = [], []
-        for i in range(lookback, len(scaled_data)):
-            X.append(scaled_data[i-lookback:i, :])
-            y.append(1 if df['close'].iloc[i] > df['close'].iloc[i-1] else 0)
-        
-        return np.array(X), np.array(y)
-    
-    def build_model(self, input_shape):
-        """Builds the LSTM neural network."""
-        units = self.config["model_architecture"]["lstm_units"]
-        model = Sequential([
-            LSTM(units, return_sequences=True, input_shape=input_shape),
-            Dropout(0.2),
-            LSTM(units, return_sequences=False),
-            Dropout(0.2),
-            Dense(units // 2, activation='relu'),
-            Dense(1, activation='sigmoid')
-        ])
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        logging.info("LSTM model architecture compiled.")
-        return model
-
-    def train_model(self):
-        """Orchestrates the entire model training and saving process."""
-        logging.info(f"--- {self.ai_name.upper()} MODEL TRAINING PROTOCOL INITIATED ---")
-        # ... (Connect to MT5) ...
-        
-        data = self.get_and_prepare_data()
-        if data is None: return
-
-        X, y = self.create_sequences_and_save_scaler(data)
-        self.model = self.build_model((X.shape[1], X.shape[2]))
-
-        callbacks = [
-            EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
-            ModelCheckpoint(filepath=self.config["model_architecture"]["model_path"], save_best_only=True, monitor='val_loss')
-        ]
-        
-        self.model.fit(X, y, 
-            epochs=self.config["training_settings"]["epochs"],
-            batch_size=self.config["training_settings"]["batch_size"],
-            validation_split=self.config["training_settings"]["validation_split"],
-            callbacks=callbacks, verbose=1)
-        
-        logging.info(f"--- TRAINING COMPLETE. Best model saved to {self.config['model_architecture']['model_path']} ---")
-        # ... (Shutdown MT5) ...
-
-if __name__ == "__main__":
-    trainer = SeraphTrainer()
-    trainer.train_model()
+if __name__=="__main__":SeraphTrainer().train()

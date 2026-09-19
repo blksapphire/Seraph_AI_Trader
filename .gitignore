@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.log
+*.sqlite3
+*.db
+artifacts/
+models/
+runtime/
