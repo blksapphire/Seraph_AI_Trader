@@ -1,13 +1,14 @@
 {
-  "system_identity": {"name": "Seraph-Prime", "version": "2.0.0"},
-  "mode": "paper",
-  "mt5": {"path": "", "login": 0, "password": "", "server": "", "magic": 260901, "timeout_ms": 60000},
-  "market": {"symbols": ["XAUUSD", "GBPJPY", "EURUSD"], "primary_timeframe": "M15", "bars": 1500, "poll_seconds": 30},
-  "brains": {"technical_weight": 0.35, "structural_weight": 0.35, "fundamental_weight": 0.15, "regime_weight": 0.15, "entry_threshold": 0.58, "agreement_threshold": 0.50},
-  "technical": {"lookback": 60, "model_path": "models/technical_model.joblib", "scaler_path": "models/technical_scaler.joblib", "feature_path": "models/technical_features.json", "min_training_rows": 500},
-  "fundamental": {"enabled": true, "news_api_key": "", "sentiment_model": "ProsusAI/finbert", "cache_minutes": 10, "currencies": ["USD", "GBP", "JPY", "EUR"], "timeout_seconds": 8},
-  "risk": {"risk_per_trade": 0.005, "max_daily_loss": 0.02, "max_open_positions": 3, "max_symbol_positions": 1, "max_spread_points": 80, "min_rr": 1.5, "atr_stop_multiplier": 1.8, "atr_target_multiplier": 2.7, "cooldown_minutes": 15, "min_hold_seconds": 90},
-  "training": {"historical_bars": 20000, "horizon_bars": 3, "validation_fraction": 0.20},
-  "runtime": {"status_file": "runtime/seraph_status.json", "journal_file": "runtime/trade_journal.jsonl", "log_file": "runtime/seraph.log"},
-  "dashboard": {"host": "127.0.0.1", "port": 8050, "refresh_seconds": 3}
+  "system_identity":{"name":"Seraph-Prime","version":"2.1.0"},
+  "mode":"paper",
+  "mt5":{"path":"","login":0,"password":"","server":"","magic":260901,"timeout_ms":60000},
+  "market":{"symbols":["XAUUSD","GBPJPY","EURUSD"],"primary_timeframe":"M15","higher_timeframe":"H1","bars":1500,"poll_seconds":30},
+  "brains":{"technical_weight":0.40,"structural_weight":0.30,"fundamental_weight":0.10,"regime_weight":0.20,"entry_threshold":0.58,"agreement_threshold":0.55,"max_fundamental_disagreement":0.65},
+  "technical":{"lookback":60,"model_path":"models/technical_model.joblib","scaler_path":"models/technical_scaler.joblib","feature_path":"models/technical_features.json","min_training_rows":500},
+  "strategies":{"weights":{"trend":0.20,"momentum":0.15,"mean_reversion":0.15,"breakout":0.15,"vwap":0.10,"candlestick":0.10,"volatility":0.05}},
+  "fundamental":{"enabled":false,"news_api_key":"","sentiment_model":"ProsusAI/finbert","cache_minutes":10,"currencies":["USD","GBP","JPY","EUR"],"timeout_seconds":8},
+  "risk":{"risk_per_trade":0.005,"max_drawdown":0.02,"max_open_positions":3,"max_symbol_positions":1,"max_spread_points":80,"min_rr":1.5,"atr_stop_multiplier":1.8,"atr_target_multiplier":2.7},
+  "training":{"historical_bars":20000,"horizon_bars":3,"validation_fraction":0.20},
+  "runtime":{"status_file":"runtime/seraph_status.json","journal_file":"runtime/trade_journal.jsonl","log_file":"runtime/seraph.log"},
+  "dashboard":{"host":"127.0.0.1","port":8050,"refresh_seconds":3}
 }
