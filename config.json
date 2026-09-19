@@ -1,7 +1,7 @@
 {
-  "system_identity":{"name":"Seraph-Prime","version":"3.0.0-unified"},
+  "system_identity":{"name":"Seraph-Prime","version":"3.1.0-bridge"},
   "mode":"paper",
-  "mt5":{"path":"","login":0,"password":"","server":"","magic":260901,"timeout_ms":60000},
+  "mt5":{"backend":"http_bridge","bridge_url":"http://127.0.0.1:8765","bridge_token_env":"SERAPH_MT5_BRIDGE_TOKEN","path":"","login":0,"password":"","server":"","magic":260901,"timeout_ms":60000},
   "market":{"symbols":["XAUUSD","GBPJPY","EURUSD"],"primary_timeframe":"M15","higher_timeframe":"H1","bars":1500,"poll_seconds":30},
   "brains":{"technical_weight":0.38,"structural_weight":0.28,"fundamental_weight":0.10,"regime_weight":0.24,"entry_threshold":0.58,"agreement_threshold":0.55,"max_fundamental_disagreement":0.65},
   "technical":{"lookback":60,"model_path":"models/technical_model.joblib","scaler_path":"models/technical_scaler.joblib","feature_path":"models/technical_features.json","min_training_rows":500},
