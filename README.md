@@ -1,36 +1,45 @@
 # Seraph-Prime Unified
 
-Local-first multi-brain MT5 trading research/execution system. The unified branch pulls the useful R-Reasoning capabilities into the cleaner v2 architecture instead of running two competing systems.
+Local-first multi-brain MT5 trading research/execution system.
 
-**Default mode is PAPER. Live execution remains opt-in.**
+The unified architecture keeps the **Seraph intelligence stack on Linux** while running the **native MetaTrader 5 Python integration inside the same Wine environment as the MT5 terminal**. A small authenticated localhost bridge connects the two.
 
-## Unified stack
+**Default mode is PAPER. Live order execution requires explicit bridge + config enablement.**
 
-MT5 → Market Data → Strategy Ensemble → Technical + SMC + Wyckoff + Fundamental + HTF → optional ML/RL overlays → Decision Engine → Risk Engine → Paper/Live → SQLite trade memory + JSON journal + notifications → Dashboard
+## Architecture
 
-## Imported R-Reasoning capabilities
+```
+Linux Mint
+  │
+  └─ Seraph Python
+       ├─ Strategy ensemble
+       ├─ Technical / SMC / Wyckoff
+       ├─ Fundamental / HTF
+       ├─ ML / optional RL
+       ├─ Decision engine
+       ├─ Risk engine
+       └─ Dashboard / SQLite / journal
+              │
+              │ HTTP localhost
+              ▼
+       Wine MT5 Bridge
+              │
+              ▼
+       MetaTrader 5 terminal
+              │
+              ▼
+       Broker / Demo / Live account
+```
 
-- Wyckoff phase/event analysis
-- MA crossover and RSI momentum strategies
-- SMT divergence strategy helper
-- SQLite trade/event memory
-- Optional reinforcement-learning environment and PPO adapter
-- RL training entry point: `train_rl.py`
-- Discord/email notifications using environment secrets
-- Strategy-oriented backtest dependency kept optional
-- Existing R-Reasoning ideas are adapted to the v2 interfaces; duplicate MT5/risk/orchestrator stacks were not copied
+MetaQuotes documents the Python integration around Windows Python and the MT5 terminal. On Linux, MT5 itself can run through Wine; this project therefore isolates the native MetaTrader5 Python package inside the Wine-side bridge instead of trying to install it into Linux Python. citeturn642103search0turn642103search2
 
-## Existing v2 capabilities retained
+## Modes
 
-- Explainable strategy ensemble
-- SMC/BOS/liquidity/FVG/order-block analysis
-- ML directional model
-- multi-timeframe decision engine
-- risk sizing and execution guards
-- paper/live separation
-- dashboard, healthcheck and CI tests
+**Paper mode** still consumes real-time market data from the MT5 terminal, but Seraph does **not** call `order_send`. It generates and records hypothetical entries/SL/TP.
 
-## Install
+**Live mode** calculates position size and risk controls in Linux, sends an order-check request through the bridge, then sends the order only when the bridge is explicitly allowed to execute.
+
+## Linux setup
 
 ```bash
 python3 -m venv .venv
@@ -40,54 +49,66 @@ python seraph_healthcheck.py
 pytest -q
 ```
 
-For RL experiments only:
+Set the same bridge token in your Linux shell and Wine-side environment:
 
 ```bash
-pip install -r requirements-rl.txt
-python train_rl.py --symbol XAUUSD --timeframe M15 --bars 10000
+export SERAPH_MT5_BRIDGE_TOKEN='replace-with-a-long-random-token'
 ```
 
-For the optional backtesting.py adapter:
+Start the Wine-side bridge with Windows Python from the same Wine prefix as MT5.
+
+## Bridge
+
+The bridge is:
+
+`bridge/mt5_bridge_server.py`
+
+Required Wine-side environment:
+
+- `SERAPH_MT5_BRIDGE_TOKEN`
+- optional `MT5_TERMINAL_PATH`
+- optional `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`
+
+For safety, live execution is disabled unless:
 
 ```bash
-pip install -r requirements-backtest.txt
+export SERAPH_BRIDGE_ALLOW_TRADING=1
 ```
 
-## Run paper mode
+The Linux config already points to:
 
-Leave `"mode": "paper"` in `config.json`.
+`http://127.0.0.1:8765`
+
+## Validation
+
+Start the bridge, then from Linux:
 
 ```bash
+python seraph_healthcheck.py
+curl http://127.0.0.1:8765/health
 python seraph_prime_orchestrator.py
 ```
 
-The deterministic ensemble remains the primary decision layer. RL is disabled by default and can only influence decisions when a trained model is explicitly configured.
+In paper mode, a generated signal is logged but no trade is sent.
 
-## Persistent learning memory
+## Other capabilities
 
-Runtime trade/event records are stored in:
-
-- `runtime/seraph.db` — SQLite
-- `runtime/trade_journal.jsonl` — append-only journal
-
-The database is intended to become the source for closed-trade outcome labeling and future reward/ensemble learning.
-
-## Notifications
-
-Notifications are disabled by default. Discord webhooks are configured in `config.json`; email credentials are supplied through `SERAPH_EMAIL_PASSWORD`. No secrets should be committed.
-
-## Backtesting
-
-```bash
-python seraph_backtester.py --symbol XAUUSD --timeframe M15 --bars 5000
-```
-
-Backtest results are research metrics, not evidence of future profitability.
+- Wyckoff phase/event analysis
+- MA crossover and RSI momentum
+- SMT divergence helper
+- SQLite trade/event memory
+- optional PPO/RL overlay
+- Discord/email notifications
+- explainable strategy ensemble
+- SMC/BOS/liquidity/FVG/order-block analysis
+- ML directional model
+- multi-timeframe decision engine
+- risk sizing and execution guards
+- dashboard, healthcheck and CI tests
 
 ## Safety
 
 - Paper mode is the default.
-- RL is optional and off by default.
-- Notification credentials are environment-based.
-- Do not enable live trading until replay and demo behaviour have been reviewed.
-- GitHub Actions validates code/tests; it does not run the MT5 trader.
+- The bridge rejects live `order_send` unless explicitly enabled.
+- Never commit bridge/account credentials.
+- Review demo behaviour before enabling live trading.
