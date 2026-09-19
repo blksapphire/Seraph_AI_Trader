@@ -1,32 +1,59 @@
-# Seraph-Prime: A Multi-Brain AI Trading System
+# Seraph-Prime v2
 
-Seraph-Prime is a professional-grade, multi-strategy algorithmic trading framework. It moves beyond simple indicators by operating on a principle of **Weighted Evidence**, synthesizing intelligence from three distinct analytical domains to form a single, unified trading decision.
+Seraph-Prime is a local-first multi-brain trading research and execution system for MetaTrader 5.
 
-**[CRITICAL RISK WARNING]**
-This is a highly complex and experimental system. Its failure modes are unpredictable. The potential for rapid and complete financial loss is extreme. You are the operator and are solely responsible for all outcomes. **DO NOT DEPLOY ON A LIVE ACCOUNT.**
+> **Research/demo software.** The default mode is `paper`. Do not treat model confidence as a guarantee of future returns. Validate on historical data, replay/backtests and a demo account before enabling live execution.
 
-## The Seraph-Prime Architecture
+## Architecture
 
-Seraph-Prime is not a single AI; it is a committee of experts led by an orchestrator.
+`MT5 -> Market Data -> Technical / Structural / Fundamental / HTF brains -> Decision Engine -> Risk Engine -> Executor -> Journal + Dashboard`
 
-1.  **🧠 The Technical Brain (`Seraph-TA`):** A quantitative analyst using an LSTM Neural Network trained on a rich set of indicators (RSI, MACD, Bollinger Bands) and patterns (Fair Value Gaps).
-2.  **👁️ The Structural Brain (`Seraph-SMC`):** A price action specialist interpreting the market through the lens of ICT and Wyckoff. It identifies liquidity sweeps and breaks in market structure.
-3.  **📰 The Fundamental Brain (`Seraph-FA`):** A macroeconomic analyst that ingests real-time financial news and uses a financial NLP model (FinBERT) to gauge market sentiment.
-4.  **👑 The Orchestrator (`Seraph-Prime`):** The master strategist. It polls each brain for its analysis, weighs their scores according to your defined strategy in `config.json`, and executes high-conviction trades.
+### Brains
+- **Technical:** normalized trend/momentum/volatility features with an optional trained ML model and a deterministic fallback.
+- **Structural:** volatility-aware liquidity sweep and break-of-structure analysis.
+- **Fundamental:** cached NewsAPI headlines with optional FinBERT sentiment; failures degrade to neutral rather than stopping the trader.
+- **HTF confirmation:** H1 structure is evaluated independently before an M15 decision is accepted.
 
-## Operational Workflow
+### Decision layer
+Every cycle records the final directional score, confidence, brain agreement and per-brain evidence. The action is only BUY/SELL when the configured threshold and agreement requirement are both met; otherwise it is HOLD.
 
-**1. Configuration: Define Your Strategy**
--   Get your API key from [newsapi.org](https://newsapi.org) and add it to `config.json`.
--   **Crucially, adjust the `strategy_weights`.** A weight of `1.0` for TA and `0` for others makes it a pure technical bot. A 50/50 split between TA and SMC ignores news. You control the bot's "personality" here.
+### Risk layer
+The new runtime includes percentage-based risk sizing, ATR-derived stop/target levels, spread limits, maximum open positions, per-symbol position limits and an equity drawdown guard. Live orders are passed through MT5 order checking and the returned trade result is inspected. MT5 documents `initialize`, market-data functions, `order_check` and `order_send` as the Python integration path. citeturn0search1turn0search0
 
-**2. Train the Technical Brain**
--   Run `python seraph_trainer.py` to train the core LSTM model on technical data. This only needs to be done once initially and then periodically.
+## Setup
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-**3. Deploy the Orchestrator**
--   Ensure your MT5 terminal is running under Wine.
--   Launch the master system: `python seraph_prime_orchestrator.py`
+Configure `config.json`. Keep it in `paper` mode while validating.
 
-**4. Monitor Mission Control**
--   Launch the dashboard: `python seraph_dashboard.py`
--   Observe the synthesized Confidence Score and the contributing narratives from each brain. This is your window into its "thought" process.
+Train the technical model:
+```bash
+python seraph_trainer.py
+```
+
+Run Seraph:
+```bash
+python seraph_prime_orchestrator.py
+```
+
+Run the dashboard in another terminal:
+```bash
+python seraph_dashboard.py
+```
+
+## Training design
+
+The trainer uses a chronological holdout rather than randomly shuffling observations. Time-series validation should preserve temporal order; scikit-learn's `TimeSeriesSplit` is one standard implementation for this problem class. citeturn0search11
+
+The current model is intentionally a lightweight gradient-boosting baseline. This gives us a measurable baseline before introducing a larger LSTM/RL system. The ML layer can be replaced without changing the decision, risk or execution interfaces.
+
+## Roadmap
+1. Historical replay/backtesting with spread, slippage and commission.
+2. Trade memory and post-trade outcome labeling.
+3. Multi-timeframe feature store and regime classifier.
+4. Walk-forward evaluation and parameter search.
+5. Ensemble calibration.
+6. Reinforcement-learning experiments only after a stable, measurable baseline.
