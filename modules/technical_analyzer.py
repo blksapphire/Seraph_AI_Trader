@@ -5,7 +5,12 @@ from modules.strategy_engine import StrategyEngine
 FEATURES=["return_1","return_3","atr","rsi","macd","macd_signal","macd_hist","bb_position","ema_fast_dist","ema_slow_dist","volume_z","range_pct","fvg","order_block"]
 class TechnicalAnalyzer:
     def __init__(self,config):
-        self.cfg=config; self.model=None; self.scaler=None; self.features=FEATURES.copy(); self.strategies=StrategyEngine(config); self.load_model()
+        self.cfg=config; self.model=None; self.scaler=None; self.features=FEATURES.copy(); self.strategies=StrategyEngine(config); self.rl=None; self.load_model()
+        if config.get("rl",{}).get("enabled"):
+            try:
+                from learning_agent.agent import RLAgent
+                self.rl=RLAgent(config["rl"].get("model_path"))
+            except Exception as exc: logging.warning("RL unavailable: %s",exc)
     @staticmethod
     def calculate_features(df):
         x=df.copy(); c=x["close"]; x["return_1"]=c.pct_change(); x["return_3"]=c.pct_change(3)
@@ -23,9 +28,7 @@ class TechnicalAnalyzer:
             import joblib; p=self.cfg["technical"]["model_path"]; s=self.cfg["technical"]["scaler_path"]
             if os.path.exists(p) and os.path.exists(s):
                 self.model=joblib.load(p); self.scaler=joblib.load(s); f=self.cfg["technical"]["feature_path"]
-                if os.path.exists(f):
-                    with open(f) as fh:self.features=json.load(fh)
-                logging.info("Technical ML model loaded")
+                if os.path.exists(f): self.features=json.load(open(f))
         except Exception as exc: logging.warning("Technical model unavailable: %s",exc)
     def analyze(self,df):
         x=self.calculate_features(df).replace([np.inf,-np.inf],np.nan).dropna(); lookback=self.cfg["technical"]["lookback"]
@@ -35,6 +38,10 @@ class TechnicalAnalyzer:
             try:
                 row=x[self.features].iloc[[-1]]; z=self.scaler.transform(row); raw=float(self.model.predict_proba(z)[0,1]) if hasattr(self.model,"predict_proba") else float(np.asarray(self.model.predict(z)).ravel()[0]); model_score=2*raw-1
             except Exception as exc: logging.warning("Technical ML prediction failed: %s",exc)
-        score=strategy["score"] if model_score is None else float(np.clip(.65*strategy["score"]+.35*model_score,-1,1))
+        score=strategy["score"] if model_score is None else float(np.clip(.55*strategy["score"]+.30*model_score+.15*strategy["wyckoff"]["score"],-1,1))
+        if self.rl is not None:
+            try:
+                obs=self.calculate_features(df).replace([np.inf,-np.inf],np.nan).dropna().tail(1).iloc[0].to_numpy(dtype=np.float32); rl=self.rl.predict(obs); score=float(np.clip(.8*score+.2*rl["score"],-1,1))
+            except Exception as exc: logging.warning("RL prediction failed: %s",exc)
         regime="trend" if abs(strategy["components"].get("trend",0))>.45 else "breakout" if abs(strategy["components"].get("breakout",0))>.65 else "range"
-        return {"score":score,"confidence":min(1,abs(score)*.8+strategy.get("agreement",0)*.2),"narrative":strategy["narrative"],"regime":regime,"strategies":strategy["components"],"ml_score":model_score}
+        return {"score":score,"confidence":min(1,abs(score)*.8+strategy.get("agreement",0)*.2),"narrative":strategy["narrative"],"regime":regime,"strategies":strategy["components"],"wyckoff":strategy["wyckoff"],"ml_score":model_score}
